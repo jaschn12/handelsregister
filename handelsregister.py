@@ -89,6 +89,9 @@ class HandelsRegister:
             with open(cachename, "w") as f:
                 f.write(html)
 
+            if self.args.currentHardCopy:
+                print("trying to download the AD")
+
             # TODO catch the situation if there's more than one company?
             # TODO get all documents attached to the exact company
             # TODO parse useful information out of the PDFs
@@ -165,6 +168,18 @@ def parse_args():
                           help="Keyword options: all=contain all keywords; min=contain at least one keyword; exact=contain the exact company name.",
                           choices=["all", "min", "exact"],
                           default="all"
+                        )
+    parser.add_argument(
+                          "-ad",
+                          "--currentHardCopy",
+                          help="Download the 'Aktueller Abdruck'.",
+                          action="store_true"
+                        )
+    parser.add_argument(
+                          "-cd",
+                          "--chronologicalHardCopy",
+                          help="Download the 'Chronologischer Abdruck'.",
+                          action="store_true"
                         )
     args = parser.parse_args()
 
