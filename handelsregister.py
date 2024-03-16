@@ -9,6 +9,7 @@ import mechanize
 import re
 import pathlib
 import sys
+import urllib.parse
 from bs4 import BeautifulSoup
 
 # Dictionaries to map arguments to values
@@ -34,7 +35,7 @@ class HandelsRegister:
         self.browser.set_handle_redirect(True)
         self.browser.set_handle_referer(True)
 
-        self.browser.addheaders = [
+        self.addheaders = [
             (
                 "User-Agent",
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15",
@@ -47,6 +48,7 @@ class HandelsRegister:
             ),
             (   "Connection", "keep-alive"    ),
         ]
+        self.browser.addheaders = self.addheaders
         
         self.cachedir = pathlib.Path("cache")
         self.cachedir.mkdir(parents=True, exist_ok=True)
@@ -60,41 +62,108 @@ class HandelsRegister:
         return self.cachedir / companyname
 
     def search_company(self):
+        print(f"{self.browser.cookiejar[0].value = }")
+        self.addheaders.append(
+            (   self.browser.cookiejar[0].name, self.browser.cookiejar[0].value)
+        )
+        self.browser.addheaders = self.addheaders
+
         cachename = self.companyname2cachename(self.args.schlagwoerter)
         if self.args.force==False and cachename.exists():
             with open(cachename, "r") as f:
                 html = f.read()
                 print("return cached content for %s" % self.args.schlagwoerter)
-        else:
-            # TODO implement token bucket to abide by rate limit
-            # Use an atomic counter: https://gist.github.com/benhoyt/8c8a8d62debe8e5aa5340373f9c509c7
-            response_search = self.browser.follow_link(text="Advanced search")
+                return get_companies_in_searchresults(html)
+            
+        # TODO implement token bucket to abide by rate limit
+        # Use an atomic counter: https://gist.github.com/benhoyt/8c8a8d62debe8e5aa5340373f9c509c7
+        response_search = self.browser.follow_link(text="Advanced search")
 
-            if self.args.debug == True:
-                print(self.browser.title())
+        if self.args.debug == True:
+            print(self.browser.title())
 
-            self.browser.select_form(name="form")
+        self.browser.select_form(name="form")
 
-            self.browser["form:schlagwoerter"] = self.args.schlagwoerter
-            so_id = schlagwortOptionen.get(self.args.schlagwortOptionen)
+        self.browser["form:schlagwoerter"] = self.args.schlagwoerter
+        so_id = schlagwortOptionen.get(self.args.schlagwortOptionen)
 
-            self.browser["form:schlagwortOptionen"] = [str(so_id)]
+        self.browser["form:schlagwortOptionen"] = [str(so_id)]
 
-            response_result = self.browser.submit()
+        response_result = self.browser.submit()
+        print(f"{self.browser.cookiejar[0].value = }")
 
-            if self.args.debug == True:
-                print(self.browser.title())
+        if self.args.debug == True:
+            print(self.browser.title())
 
-            html = response_result.read().decode("utf-8")
-            with open(cachename, "w") as f:
-                f.write(html)
+        html = response_result.read().decode("utf-8")
+        with open(cachename, "w") as f:
+            f.write(html)
 
-            if self.args.currentHardCopy:
-                print("trying to download the AD")
+        # TODO catch the situation if there's more than one company?
+        # TODO get all documents attached to the exact company
+        print(self.browser.geturl())
+        
+        if self.args.currentHardCopy:
+            print('# trying to download AD')
+            print(f"{self.browser.geturl() = }")
+            # get sec ip for GET parameter
+            sec_ip = re.search(r'sec_ip=([.0-9]+)"', html).group(1)
+            url = f"https://www.handelsregister.de/rp_web/ergebnisse.xhtml?sec_ip={sec_ip}"
+            # get identifier number for post
+            id_nr = re.findall(r'selectedSuchErgebnisFormTable:0:j_idt(\d+):0:fade', html)[0]
+            self.browser.select_form(name="ergebnissForm")
+            select_str = f"ergebnissForm:selectedSuchErgebnisFormTable:0:j_idt{id_nr}:0:fade"
+            req_data = self.browser.form.click_request_data()
+            # req_data = req_data[:1] + ( req_data[1] + "&" + urllib.parse.quote(select_str),) + req_data[2:]
+            req = mechanize.Request(url=req_data[0],
+                                    data=req_data[1] + "&" + urllib.parse.quote(select_str))
+            ad_response = self.browser.open(req)
+            filepath = self.companyname2cachename(self.args.schlagwoerter + " AD.pdf")
+            with open(filepath, "wb") as f:
+                f.write(ad_response.read())
+            print(f"{ad_response.geturl() = }")
+            print(f"{self.browser.geturl() = }")
+            self.browser.back()
 
-            # TODO catch the situation if there's more than one company?
-            # TODO get all documents attached to the exact company
-            # TODO parse useful information out of the PDFs
+        if self.args.chronologicalHardCopy:
+            print('# trying to download CD')
+            print(f"{self.browser.geturl() = }")
+            # get identifier number for post
+            id_nr = re.findall(r'selectedSuchErgebnisFormTable:0:j_idt(\d+):1:fade', html)[0]
+            self.browser.select_form(name="ergebnissForm")
+            select_str = f"ergebnissForm:selectedSuchErgebnisFormTable:0:j_idt{id_nr}:1:fade"
+            # retrieve the data that would be sent if "click()"
+            req_data = self.browser.form.click_request_data()
+            # modify the request data: add the selection data
+            # this data point is not included in the forms and seems to be JS magic
+            # req_data = req_data[:1] + ( req_data[1] + "&" + urllib.parse.quote(select_str),) + req_data[2:]
+            req = mechanize.Request(url=req_data[0],
+                                    data=req_data[1] + "&" + urllib.parse.quote(select_str))
+            ad_response = self.browser.open(req)
+            filepath = self.companyname2cachename(self.args.schlagwoerter + " CD.pdf")
+            with open(filepath, "wb") as f:
+                f.write(ad_response.read())
+            self.browser.back()
+
+        if self.args.structuredContent:
+            print('# trying to download SI')
+            # get identifier number for post
+            id_nr = re.findall(r'selectedSuchErgebnisFormTable:0:j_idt(\d+):1:fade', html)[0]
+            self.browser.select_form(name="ergebnissForm")
+            select_str = f"ergebnissForm:selectedSuchErgebnisFormTable:0:j_idt{id_nr}:6:fade"
+            # retrieve the data that would be sent if "click()"
+            req_data = self.browser.form.click_request_data()
+            # modify the request data: add the selection data
+            req = mechanize.Request(url=req_data[0],
+                                    data=req_data[1] + "&" + urllib.parse.quote(select_str))
+            ad_response = self.browser.open(req)
+            filepath = self.companyname2cachename(self.args.schlagwoerter + " SI.xml")
+            with open(filepath, "wb") as f:
+                f.write(ad_response.read())
+            self.browser.back()
+
+
+        # TODO parse useful information out of the PDFs
         return get_companies_in_searchresults(html)
 
 
@@ -109,7 +178,8 @@ def parse_result(result):
     d['name'] = cells[2]
     d['state'] = cells[3]
     d['status'] = cells[4]
-    d['documents'] = cells[5] # todo: get the document links
+    d['documents'] = cells[5] # todo: get the document links    
+
     d['history'] = []
     hist_start = 8
     hist_cnt = (len(cells)-hist_start)/3
@@ -119,7 +189,8 @@ def parse_result(result):
     return d
 
 def pr_company_info(c):
-    for tag in ('name', 'court', 'state', 'status'):
+    # for tag in ('name', 'court', 'state', 'status'):
+    for tag in ('name', 'court'):
         print('%s: %s' % (tag, c.get(tag, '-')))
     print('history:')
     for name, loc in c.get('history'):
@@ -181,8 +252,14 @@ def parse_args():
                           help="Download the 'Chronologischer Abdruck'.",
                           action="store_true"
                         )
-    args = parser.parse_args()
-
+    parser.add_argument(
+                          "-si",
+                          "--structuredContent",
+                          help="Download the 'Chronologischer Abdruck'.",
+                          action="store_true"
+                        )
+    # args = parser.parse_args()
+    args = parser.parse_args(['-s', 'hotel st georg knerr', '-so', 'all', '-ad', '-cd', '-si', '-f'])
 
     # Enable debugging if wanted
     if args.debug == True:
@@ -195,9 +272,12 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
+    print(f"{args = }")
     h = HandelsRegister(args)
     h.open_startpage()
+    self = h
     companies = h.search_company()
     if companies is not None:
         for c in companies:
             pr_company_info(c)
+
