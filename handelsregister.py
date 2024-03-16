@@ -101,7 +101,6 @@ class HandelsRegister:
 
         # TODO catch the situation if there's more than one company?
         # TODO get all documents attached to the exact company
-        print(self.browser.geturl())
         
         if self.args.currentHardCopy:
             print('# trying to download AD')
@@ -146,9 +145,26 @@ class HandelsRegister:
             self.browser.back()
 
         if self.args.structuredContent:
+            print('# trying to download HD')
+            # get identifier number for post
+            id_nr = re.findall(r'selectedSuchErgebnisFormTable:0:j_idt(\d+):2:fade', html)[0]
+            self.browser.select_form(name="ergebnissForm")
+            select_str = f"ergebnissForm:selectedSuchErgebnisFormTable:0:j_idt{id_nr}:2:fade"
+            # retrieve the data that would be sent if "click()"
+            req_data = self.browser.form.click_request_data()
+            # modify the request data: add the selection data
+            req = mechanize.Request(url=req_data[0],
+                                    data=req_data[1] + "&" + urllib.parse.quote(select_str))
+            ad_response = self.browser.open(req)
+            filepath = self.companyname2cachename(self.args.schlagwoerter + " HD.pdf")
+            with open(filepath, "wb") as f:
+                f.write(ad_response.read())
+            self.browser.back()
+            
+        if self.args.structuredContent:
             print('# trying to download SI')
             # get identifier number for post
-            id_nr = re.findall(r'selectedSuchErgebnisFormTable:0:j_idt(\d+):1:fade', html)[0]
+            id_nr = re.findall(r'selectedSuchErgebnisFormTable:0:j_idt(\d+):6:fade', html)[0]
             self.browser.select_form(name="ergebnissForm")
             select_str = f"ergebnissForm:selectedSuchErgebnisFormTable:0:j_idt{id_nr}:6:fade"
             # retrieve the data that would be sent if "click()"
@@ -163,8 +179,15 @@ class HandelsRegister:
             self.browser.back()
 
 
+        if self.args.downloadAllDocuments:
+            print('# trying to download all files')
+
+
+
         # TODO parse useful information out of the PDFs
-        return get_companies_in_searchresults(html)
+        search_results = get_companies_in_searchresults(html)
+
+        return search_results
 
 
 def parse_result(result):
@@ -253,13 +276,26 @@ def parse_args():
                           action="store_true"
                         )
     parser.add_argument(
+                          "-hd",
+                          "--historicalHardCopy",
+                          help="Download the 'Historischer Abdruck'.",
+                          action="store_true"
+                        )
+    parser.add_argument(
                           "-si",
                           "--structuredContent",
-                          help="Download the 'Chronologischer Abdruck'.",
+                          help="Download the structured content as XML file.",
+                          action="store_true"
+                        )
+    parser.add_argument(
+                          "-docs",
+                          "--downloadAllDocuments",
+                          help="Download all documents in the documents view.",
                           action="store_true"
                         )
     # args = parser.parse_args()
-    args = parser.parse_args(['-s', 'hotel st georg knerr', '-so', 'all', '-ad', '-cd', '-si', '-f'])
+    # manually set args for enabling interactive mode
+    args = parser.parse_args(['-s', 'hotel st georg knerr', '-so', 'all', '-ad', '-cd', '-si', '-f', '-d'])
 
     # Enable debugging if wanted
     if args.debug == True:
@@ -275,7 +311,7 @@ if __name__ == "__main__":
     print(f"{args = }")
     h = HandelsRegister(args)
     h.open_startpage()
-    self = h
+    self = h # for Interactive Mode 
     companies = h.search_company()
     if companies is not None:
         for c in companies:
