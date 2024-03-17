@@ -70,11 +70,11 @@ class HandelsRegister:
         )
         self.browser.addheaders = self.addheaders
 
-        cachename = self.companyname2cachename(self.args.schlagwoerter, 'cached_html.html')
+        cachename = self.companyname2cachename(' '.join(self.args.schlagwoerter), 'cached_html.html')
         # if self.args.force==False and cachename.exists():
         #     with open(cachename, "r") as f:
         #         html = f.read()
-        #         print("return cached content for %s" % self.args.schlagwoerter)
+        #         print("return cached content for %s" % ' '.join(self.args.schlagwoerter))
         #         return get_companies_in_searchresults(html)
             
         # TODO implement token bucket to abide by rate limit
@@ -86,7 +86,7 @@ class HandelsRegister:
 
         self.browser.select_form(name="form")
 
-        self.browser["form:schlagwoerter"] = self.args.schlagwoerter
+        self.browser["form:schlagwoerter"] = ' '.join(self.args.schlagwoerter)
         so_id = schlagwortOptionen.get(self.args.schlagwortOptionen)
 
         self.browser["form:schlagwortOptionen"] = [str(so_id)]
@@ -119,7 +119,7 @@ class HandelsRegister:
             req = mechanize.Request(url=req_data[0],
                                     data=req_data[1] + "&" + urllib.parse.quote(select_str))
             ad_response = self.browser.open(req)
-            filepath = self.companyname2cachename(self.args.schlagwoerter, "AD.pdf")
+            filepath = self.companyname2cachename(' '.join(self.args.schlagwoerter), "AD.pdf")
             with open(filepath, "wb") as f:
                 f.write(ad_response.read())
             logging.debug(f"{ad_response.geturl() = }")
@@ -141,7 +141,7 @@ class HandelsRegister:
             req = mechanize.Request(url=req_data[0],
                                     data=req_data[1] + "&" + urllib.parse.quote(select_str))
             cd_response = self.browser.open(req)
-            filepath = self.companyname2cachename(self.args.schlagwoerter, "CD.pdf")
+            filepath = self.companyname2cachename(' '.join(self.args.schlagwoerter), "CD.pdf")
             with open(filepath, "wb") as f:
                 f.write(cd_response.read())
             self.browser.back()
@@ -158,7 +158,7 @@ class HandelsRegister:
             req = mechanize.Request(url=req_data[0],
                                     data=req_data[1] + "&" + urllib.parse.quote(select_str))
             hd_response = self.browser.open(req)
-            filepath = self.companyname2cachename(self.args.schlagwoerter, "HD.pdf")
+            filepath = self.companyname2cachename(' '.join(self.args.schlagwoerter), "HD.pdf")
             with open(filepath, "wb") as f:
                 f.write(hd_response.read())
             self.browser.back()
@@ -175,7 +175,7 @@ class HandelsRegister:
             req = mechanize.Request(url=req_data[0],
                                     data=req_data[1] + "&" + urllib.parse.quote(select_str))
             si_response = self.browser.open(req)
-            filepath = self.companyname2cachename(self.args.schlagwoerter, "SI.xml")
+            filepath = self.companyname2cachename(' '.join(self.args.schlagwoerter), "SI.xml")
             with open(filepath, "wb") as f:
                 f.write(si_response.read())
             self.browser.back()
@@ -285,7 +285,7 @@ class HandelsRegister:
                 assert "attachment;" in download_resp.get('Content-Disposition', default="")
                 filename = re.search(r'filename="(.*?)"', download_resp.get('Content-Disposition', default="file")).group(1)
                 download_data = download_resp.read()
-                filepath = self.companyname2cachename(self.args.schlagwoerter, filename)
+                filepath = self.companyname2cachename(' '.join(self.args.schlagwoerter), filename)
                 with open(filepath, "wb") as f:
                     f.write(download_data)
 
@@ -375,6 +375,7 @@ def parse_args():
                           "--schlagwoerter",
                           help="Search for the provided keywords",
                           required=True,
+                          nargs='+',
                           default="Gasag AG" # TODO replace default with a generic search term
                         )
     parser.add_argument(

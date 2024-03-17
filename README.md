@@ -247,7 +247,7 @@ git clone https://github.com/bundesAPI/handelsregister.git
 cd handelsregister
 conda create -n handelsregister-api python mechanize beautifulsoup4 pytest
 conda activate handelsregister-api
-python handelsregister.py -s "deutsche bahn" -so all
+python handelsregister.py -s deutsche bahn -so all
 ```
 Run tests:
 ```commandline
