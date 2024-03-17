@@ -17,7 +17,9 @@ def test_parse_search_result():
 
 
 def test_get_results():
-    args = argparse.Namespace(debug=False, force=False, schlagwoerter='deutsche bahn', schlagwortOptionen='all')
+    args = argparse.Namespace(debug=False, force=False, schlagwoerter='deutsche bahn', schlagwortOptionen='all',
+                              currentHardCopy=False, chronologicalHardCopy=False, historicalHardCopy=False,
+                              structuredContent=False, downloadAllDocuments=False)
     h = HandelsRegister(args)
     h.open_startpage()
     companies = h.search_company()
