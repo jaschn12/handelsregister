@@ -241,11 +241,12 @@ Ort (Angaben nur zur Hauptniederlassung). Beispielsweise Feucht. Zulässige Plat
 Straße (Angaben nur zur Hauptniederlassung). Beispielsweise Teststraße 2. Zulässige Platzhalterzeichen sind \* und ? - wobei das Sternchen für beliebig viele (auch kein) Zeichen steht, das Fragezeichen hingegen für genau ein Zeichen. 
 
 ### Installation with poetry
-Example installation and execution with [poetry](https://python-poetry.org/):
+Example installation and execution with conda:
 ```commandline
 git clone https://github.com/bundesAPI/handelsregister.git
 cd handelsregister
-conda create -n handelsregister-api python mechanize beautifulsoup4 
+conda create -n handelsregister-api python mechanize beautifulsoup4 pytest
+conda activate handelsregister-api
 python handelsregister.py -s "deutsche bahn" -so all
 ```
 Run tests:
