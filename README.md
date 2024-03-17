@@ -245,12 +245,12 @@ Example installation and execution with [poetry](https://python-poetry.org/):
 ```commandline
 git clone https://github.com/bundesAPI/handelsregister.git
 cd handelsregister
-poetry install
-poetry run python handelsregister.py -s "deutsche bahn" -so all
+conda create -n handelsregister-api python mechanize beautifulsoup4 
+python handelsregister.py -s "deutsche bahn" -so all
 ```
 Run tests:
 ```commandline
-poetry run python -m pytest
+python -m pytest
 ```
 
 
@@ -259,7 +259,10 @@ poetry run python -m pytest
 Das CLI ist _work in progress_ und 
 
 ```
-usage: handelsregister.py [-h] [-d] [-f] -s SCHLAGWOERTER [-so {all,min,exact}]
+python handelsregister.py -h
+usage: handelsregister.py [-h] [-d] [-f] -s SCHLAGWOERTER
+                          [-so {all,min,exact}] [-ad] [-cd] [-hd] [-si]
+                          [-docs]
 
 A handelsregister CLI
 
@@ -270,6 +273,17 @@ options:
   -s SCHLAGWOERTER, --schlagwoerter SCHLAGWOERTER
                         Search for the provided keywords
   -so {all,min,exact}, --schlagwortOptionen {all,min,exact}
-                        Keyword options: all=contain all keywords; min=contain at least one
-                        keyword; exact=contain the exact company name.
+                        Keyword options: all=contain all keywords; min=contain
+                        at least one keyword; exact=contain the exact company
+                        name.
+  -ad, --currentHardCopy
+                        Download the 'Aktueller Abdruck'.
+  -cd, --chronologicalHardCopy
+                        Download the 'Chronologischer Abdruck'.
+  -hd, --historicalHardCopy
+                        Download the 'Historischer Abdruck'.
+  -si, --structuredContent
+                        Download the structured content as XML file.
+  -docs, --downloadAllDocuments
+                        Download all documents in the documents view.
 ```
