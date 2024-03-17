@@ -11,6 +11,7 @@ import pathlib
 import sys
 import urllib.parse
 from bs4 import BeautifulSoup
+import logging
 
 # Dictionaries to map arguments to values
 schlagwortOptionen = {
@@ -63,7 +64,7 @@ class HandelsRegister:
         return self.cachedir / companyname / filename
 
     def search_company(self):
-        print(f"{self.browser.cookiejar[0].value = }")
+        logging.debug(f"{self.browser.cookiejar[0].value = }")
         self.addheaders.append(
             (   self.browser.cookiejar[0].name, self.browser.cookiejar[0].value)
         )
@@ -81,7 +82,7 @@ class HandelsRegister:
         response_search = self.browser.follow_link(text="Advanced search")
 
         if self.args.debug == True:
-            print(self.browser.title())
+            logging.debug(self.browser.title())
 
         self.browser.select_form(name="form")
 
@@ -91,10 +92,10 @@ class HandelsRegister:
         self.browser["form:schlagwortOptionen"] = [str(so_id)]
 
         response_result = self.browser.submit()
-        print(f"{self.browser.cookiejar[0].value = }")
+        logging.debug(f"{self.browser.cookiejar[0].value = }")
 
         if self.args.debug == True:
-            print(self.browser.title())
+            logging.debug(self.browser.title())
 
         html = response_result.read().decode("utf-8")
         with open(cachename, "w") as f:
@@ -104,8 +105,8 @@ class HandelsRegister:
         # TODO get all documents attached to the exact company
         
         if self.args.currentHardCopy:
-            print('# trying to download AD')
-            print(f"{self.browser.geturl() = }")
+            logging.debug('# trying to download AD')
+            logging.debug(f"{self.browser.geturl() = }")
             # get sec ip for GET parameter
             sec_ip = re.search(r'sec_ip=([.0-9]+)"', html).group(1)
             url = f"https://www.handelsregister.de/rp_web/ergebnisse.xhtml?sec_ip={sec_ip}"
@@ -121,13 +122,13 @@ class HandelsRegister:
             filepath = self.companyname2cachename(self.args.schlagwoerter, "AD.pdf")
             with open(filepath, "wb") as f:
                 f.write(ad_response.read())
-            print(f"{ad_response.geturl() = }")
-            print(f"{self.browser.geturl() = }")
+            logging.debug(f"{ad_response.geturl() = }")
+            logging.debug(f"{self.browser.geturl() = }")
             self.browser.back()
 
         if self.args.chronologicalHardCopy:
-            print('# trying to download CD')
-            print(f"{self.browser.geturl() = }")
+            logging.debug('# trying to download CD')
+            logging.debug(f"{self.browser.geturl() = }")
             # get identifier number for post
             id_nr = re.findall(r'selectedSuchErgebnisFormTable:0:j_idt(\d+):1:fade', html)[0]
             self.browser.select_form(name="ergebnissForm")
@@ -146,7 +147,7 @@ class HandelsRegister:
             self.browser.back()
 
         if self.args.structuredContent:
-            print('# trying to download HD')
+            logging.debug('# trying to download HD')
             # get identifier number for post
             id_nr = re.findall(r'selectedSuchErgebnisFormTable:0:j_idt(\d+):2:fade', html)[0]
             self.browser.select_form(name="ergebnissForm")
@@ -163,7 +164,7 @@ class HandelsRegister:
             self.browser.back()
 
         if self.args.structuredContent:
-            print('# trying to download SI')
+            logging.debug('# trying to download SI')
             # get identifier number for post
             id_nr = re.findall(r'selectedSuchErgebnisFormTable:0:j_idt(\d+):6:fade', html)[0]
             self.browser.select_form(name="ergebnissForm")
@@ -181,7 +182,7 @@ class HandelsRegister:
 
 
         if self.args.downloadAllDocuments:
-            print('# trying to download all files')
+            logging.debug('# trying to download all files')
             # get identifier number for post
             id_nr = re.findall(r'selectedSuchErgebnisFormTable:0:j_idt(\d+):3:fade', html)[0]
             self.browser.select_form(name="ergebnissForm")
@@ -193,10 +194,8 @@ class HandelsRegister:
                                     data=req_data[1] + "&" + urllib.parse.quote(select_str))
             docs_response = self.browser.open(req)
             html_docs = docs_response.read()
-            with open("html_docs", "wb") as f:
-                f.write(html_docs)
-
-            print(f"{self.browser.geturl() = }")
+            
+            logging.debug(f"{self.browser.geturl() = }")
             self.browser.select_form(name="dk_form")
             select = self.browser.form.click()
             # self.browser.back()
@@ -421,16 +420,15 @@ def parse_args():
 
     # Enable debugging if wanted
     if args.debug == True:
-        import logging
         logger = logging.getLogger("mechanize")
         logger.addHandler(logging.StreamHandler(sys.stdout))
         logger.setLevel(logging.DEBUG)
-
+        logging.basicConfig(level=logging.DEBUG)
     return args
 
 if __name__ == "__main__":
     args = parse_args()
-    print(f"{args = }")
+    logging.debug(f"{args = }")
     h = HandelsRegister(args)
     h.open_startpage()
     self = h # for Interactive Mode 
