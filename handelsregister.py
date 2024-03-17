@@ -415,9 +415,9 @@ def parse_args():
                           help="Download all documents in the documents view.",
                           action="store_true"
                         )
-    # args = parser.parse_args()
+    args = parser.parse_args()
     # manually set args for enabling interactive mode
-    args = parser.parse_args(['-s', 'hotel st georg knerr', '-so', 'all', '-docs', '-f', '-d'])
+    # args = parser.parse_args(['-s', 'hotel st georg knerr', '-so', 'all', '-docs', '-f', '-d'])
 
     # Enable debugging if wanted
     if args.debug == True:
