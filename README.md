@@ -240,7 +240,7 @@ Ort (Angaben nur zur Hauptniederlassung). Beispielsweise Feucht. Zulässige Plat
 
 Straße (Angaben nur zur Hauptniederlassung). Beispielsweise Teststraße 2. Zulässige Platzhalterzeichen sind \* und ? - wobei das Sternchen für beliebig viele (auch kein) Zeichen steht, das Fragezeichen hingegen für genau ein Zeichen. 
 
-### Installation with poetry
+### Installation with conda
 Example installation and execution with conda:
 ```commandline
 git clone https://github.com/bundesAPI/handelsregister.git
