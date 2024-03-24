@@ -41,9 +41,28 @@ class SearchResult:
         court: {self.court}
         city: {self.city}
         status: {self.status}
-        history: {"\n           ".join([s for s in history_strings])}
-        documents: {"\n           ".join([str(d) for d in self.documents])}
+        history: {(chr(10)+"           ").join([s for s in history_strings])}
+        documents: {(chr(10)+"           ").join([str(d) for d in self.documents])}
         """.strip()
+    
+    def toDict(self) -> dict:
+        "convert to dict for export"
+        d = {
+            'name' : self.name,
+            'court' : self.court,
+            'city' : self.city,
+            'status' : self.status,
+            'history' : self.history,
+            'documents' : [
+                {
+                    'filename' : d.filename,
+                    'length' : len(d.content)
+                }
+                for d in self.documents
+            ]
+        }
+        return d
+
 
 # Dictionaries to map arguments to values
 schlagwortOptionen = {
@@ -53,6 +72,7 @@ schlagwortOptionen = {
 }
 
 class HandelsRegister:
+    "class for handling the web traffic"
     def __init__(self, args):
         self.args = args
         self.browser = mechanize.Browser()
@@ -71,25 +91,31 @@ class HandelsRegister:
         self.addheaders = [
             (
                 "User-Agent",
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             ),
-            (   "Accept-Language", "en-GB,en;q=0.9"   ),
-            (   "Accept-Encoding", "gzip, deflate, br"    ),
             (
                 "Accept",
-                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            ),
+            (
+                "Cache-Control", "no-cache",
+            ),
+            (   "Accept-Language", "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7"   ),
+            (   "Accept-Encoding", "gzip, deflate, br, zstd"    ),
+            (
+                "Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             ),
             (   "Connection", "keep-alive"    ),
         ]
         self.browser.addheaders = self.addheaders
         
-        self.downloaddir = pathlib.Path("cache")
+        self.downloaddir = pathlib.Path("downloads")
         self.downloaddir.mkdir(parents=True, exist_ok=True)
         self.cachedir = pathlib.Path("cache")
         self.cachedir.mkdir(parents=True, exist_ok=True)
 
     def open_startpage(self):
-        self.browser.open("https://www.handelsregister.de", timeout=10)
+        self.browser.open("https://www.handelsregister.de", timeout=30)
 
     def companyname2cachename(self, companyname):
         # map a companyname to a filename, that caches the downloaded HTML, so re-running this script touches the
@@ -99,8 +125,9 @@ class HandelsRegister:
         (self.cachedir / companyname).mkdir(parents=True, exist_ok=True)
         return self.cachedir / companyname / filename
     
-    def getDocumentFromSearchResult(self, type:str, browser: mechanize.Browser, 
-                                        html : str, company : SearchResult):
+    def getDocumentFromSearchResult(self, type:str, id_nr : str, browser: mechanize.Browser, 
+                                        row_index : int, company : SearchResult) -> None:
+            "Append the given 'company' object with a document from the search result page"
             type2col = {
                 "AD" : 0,
                 "CD" : 1,
@@ -110,11 +137,11 @@ class HandelsRegister:
             if type not in type2col: 
                 logging.error(f"getDocumentFromSearchResult: Wrong Document given. Got {type}, expected one of {type2col.keys()}")
                 return None
-            logging.debug(f'# trying to download {type}')
-            logging.debug(f"{browser.geturl() = }")
-            id_nr = re.findall(f'selectedSuchErgebnisFormTable:0:j_idt(\d+):{type2col[type]}:fade', html)[0]
+            logging.info(f'# trying to download {type}')
+            logging.info(f"{browser.geturl() = }")
+
             browser.select_form(name="ergebnissForm")
-            select_str = f"ergebnissForm:selectedSuchErgebnisFormTable:0:j_idt{id_nr}:{type2col[type]}:fade"
+            select_str = f"ergebnissForm:selectedSuchErgebnisFormTable:{row_index}:j_idt{id_nr}:{type2col[type]}:fade"
             req_data = browser.form.click_request_data()
             # retrieve the data that would be sent if "click()"
             req = mechanize.Request(url=req_data[0],
@@ -127,17 +154,15 @@ class HandelsRegister:
             #     f.write(content)
             company.documents.append(DownloadedFile(filename=filename, content=content))
             
-            logging.debug(f"{response.geturl() = }")
+            logging.info(f"{response.geturl() = }")
             browser.back()
 
-    def getDocsFromDocsPage(self, browser: mechanize.Browser, html : str, 
+    def getDocsFromDocsPage(self, browser: mechanize.Browser, id_nr : str, row_index : int, 
                                     company : SearchResult):
-        logging.debug('# trying to download all files')
+        logging.info('# trying to download all files')
         browser.open("https://www.handelsregister.de/rp_web/ergebnisse.xhtml", timeout=30)
-        # get identifier number for post
-        id_nr = re.findall(r'selectedSuchErgebnisFormTable:0:j_idt(\d+):3:fade', html)[0]
         browser.select_form(name="ergebnissForm")
-        select_str = f"ergebnissForm:selectedSuchErgebnisFormTable:0:j_idt{id_nr}:3:fade"
+        select_str = f"ergebnissForm:selectedSuchErgebnisFormTable:{row_index}:j_idt{id_nr}:3:fade"
         # retrieve the data that would be sent if "click()"
         req_data = browser.form.click_request_data()
         # modify the request data: add the selection data
@@ -239,8 +264,10 @@ class HandelsRegister:
         return len(to_download)
 
 
-    def search_companies(self):
+    def search_companies(self) -> list[SearchResult]:
         companies : list[SearchResult] = []
+        if not self.browser.cookiejar:
+            return []
         logging.debug(f"{self.browser.cookiejar[0].value = }")
         self.addheaders.append(
             (   self.browser.cookiejar[0].name, self.browser.cookiejar[0].value)
@@ -256,7 +283,8 @@ class HandelsRegister:
             
         # TODO implement token bucket to abide by rate limit
         # Use an atomic counter: https://gist.github.com/benhoyt/8c8a8d62debe8e5aa5340373f9c509c7
-        response_search = self.browser.follow_link(text="Advanced search")
+        response_search = self.browser.follow_link(text="Erweiterte Suche")
+        search_page_html = response_search.read().decode("utf-8")
 
         if self.args.debug == True:
             logging.debug(self.browser.title())
@@ -267,6 +295,25 @@ class HandelsRegister:
         so_id = schlagwortOptionen.get(self.args.schlagwortOptionen)
 
         self.browser["form:schlagwortOptionen"] = [str(so_id)]
+
+        if self.args.registerNummer:
+            nr_str = "" 
+            for substr in self.args.registerNummer:
+                if substr.isnumeric(): nr_str = nr_str + substr
+            print(f"{nr_str=}")
+            self.browser["form:registerNummer"] = nr_str
+        if self.args.registerGericht:
+            # optionen finden
+            soup = BeautifulSoup(search_page_html, 'html.parser')
+            gerichte_inputs = soup.find(id='form:registergericht_input')
+            gericht2ID = {
+                str(o.text).lower().strip() : o['value'] 
+                for o in gerichte_inputs.select('option') if o.get('value')
+            }
+            gericht_str = (" ".join(self.args.registerGericht)).lower().strip()
+            if gericht_str not in gericht2ID:
+                raise ValueError(f"specified register court {self.args.registerGericht} is invalid")
+            self.browser["form:registergericht_input"] = [gericht2ID[gericht_str]]
 
         response_result = self.browser.submit()
         logging.debug(f"{self.browser.cookiejar[0].value = }")
@@ -283,6 +330,12 @@ class HandelsRegister:
         grid = soup.find('table', role='grid')
         #print('grid: %s', grid)
 
+        id_nrs_found = re.findall(r'selectedSuchErgebnisFormTable:0:j_idt(\d+):0:fade', html)
+        if not id_nrs_found: 
+            logging.info(f"no id_nr found in {html}")
+            return
+        id_nr = id_nrs_found[0]
+
         for table_row in grid.find_all('tr'):
             index_str = table_row.get('data-ri')
             if index_str is None: 
@@ -290,19 +343,20 @@ class HandelsRegister:
             #print('r[%s] %s' % (index_str, result))
             company = parse_result(table_row)
             companies.append(company)
+
         
             if self.args.currentHardCopy:
-                self.getDocumentFromSearchResult(type="AD", browser=self.browser, html=str(table_row), company=company)
+                self.getDocumentFromSearchResult(type="AD", id_nr=id_nr, browser=self.browser, row_index=len(companies)-1, company=company)
             if self.args.chronologicalHardCopy:
-                self.getDocumentFromSearchResult(type="CD", browser=self.browser, html=str(table_row), company=company)
+                self.getDocumentFromSearchResult(type="CD", id_nr=id_nr, browser=self.browser, row_index=len(companies)-1, company=company)
             if self.args.historicalHardCopy:
-                self.getDocumentFromSearchResult(type="CD", browser=self.browser, html=str(table_row), company=company)
+                self.getDocumentFromSearchResult(type="CD", id_nr=id_nr, browser=self.browser, row_index=len(companies)-1, company=company)
             if self.args.structuredContent:
-                self.getDocumentFromSearchResult(type="SI", browser=self.browser, html=str(table_row), company=company)
+                self.getDocumentFromSearchResult(type="SI", id_nr=id_nr, browser=self.browser, row_index=len(companies)-1, company=company)
             
             if self.args.downloadAllDocuments:
                 # copy the browser object so that self.browser remains in the same state
-                self.getDocsFromDocsPage(browser=copy.copy(self.browser), html=str(table_row), company=company)         
+                self.getDocsFromDocsPage(browser=copy.copy(self.browser), id_nr=id_nr, row_index=len(companies)-1, company=company)         
 
         return companies
 
@@ -339,6 +393,12 @@ def parse_args(args_string = None):
                           action="store_true"
                         )
     parser.add_argument(
+                          "-i",
+                          "--info",
+                          help="Enable info mode and activate logging",
+                          action="store_true"
+                        )
+    parser.add_argument(
                           "-f",
                           "--force",
                           help="Force a fresh pull and skip the cache",
@@ -358,6 +418,18 @@ def parse_args(args_string = None):
                           help="Keyword options: all=contain all keywords; min=contain at least one keyword; exact=contain the exact company name.",
                           choices=["all", "min", "exact"],
                           default="all"
+                        )
+    parser.add_argument(
+                          "-nr",
+                          "--registerNummer",
+                          help="Search for the provided register number",
+                          nargs='+'
+                        )
+    parser.add_argument(
+                          "-gericht",
+                          "--registerGericht",
+                          help="Search for the provided register number",
+                          nargs='+'
                         )
     parser.add_argument(
                           "-ad",
@@ -390,7 +462,7 @@ def parse_args(args_string = None):
                           action="store_true"
                         )
     if args_string:
-        args = parser.parse_args(args_string.split())
+        args = parser.parse_args(re.split(r'\s+', args_string))
     else:
         args = parser.parse_args()
     # manually set args for enabling interactive mode
@@ -401,15 +473,23 @@ def parse_args(args_string = None):
         logger.addHandler(logging.StreamHandler(sys.stdout))
         logger.setLevel(logging.DEBUG)
         logging.basicConfig(level=logging.DEBUG)
+    elif args.info == True:
+        logger = logging.getLogger("mechanize")
+        logger.addHandler(logging.StreamHandler(sys.stdout))
+        logger.setLevel(logging.INFO)
+        logging.basicConfig(level=logging.INFO)
     return args
 
 if __name__ == "__main__":
-    #args = parse_args()
-    args = parse_args('-s hotel st georg knerr -so all -docs -f')
+    args = parse_args()
+    #args = parse_args('-s fieldfisher -gericht Berlin (Charlottenburg) -nr HRB 248027 -d')
     logging.debug(f"{args = }")
     h = HandelsRegister(args)
     h.open_startpage()
     self = h # for Interactive Mode 
     companies = h.search_companies()
-    for company in companies:
-        print(company, end='\n\n')
+    if not companies: 
+        print("No companies matching your search")
+    else: 
+        for company in companies:
+            print(company, end='\n\n')

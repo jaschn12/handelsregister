@@ -22,5 +22,5 @@ def test_get_results():
                               structuredContent=False, downloadAllDocuments=False)
     h = HandelsRegister(args)
     h.open_startpage()
-    companies = h.search_company()
+    companies = h.search_companies()
     assert len(companies) > 0
