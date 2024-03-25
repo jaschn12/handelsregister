@@ -115,7 +115,17 @@ class HandelsRegister:
         self.cachedir.mkdir(parents=True, exist_ok=True)
 
     def open_startpage(self):
-        self.browser.open("https://www.handelsregister.de", timeout=30)
+        # 3 retries
+        for _ in range(3):
+            try: 
+                self.browser.open("https://www.handelsregister.de", timeout=30)
+            except: 
+                logging.info(f"could not open start page, retry")
+                continue
+            else:
+                return
+        logging.error(f"could not open start page, abort.")
+        
 
     def companyname2cachename(self, companyname):
         # map a companyname to a filename, that caches the downloaded HTML, so re-running this script touches the
@@ -147,7 +157,12 @@ class HandelsRegister:
             req = mechanize.Request(url=req_data[0],
                                     data=req_data[1] + "&" + urllib.parse.quote(select_str))
             response = browser.open(req)
-            filename = re.search(r'filename="(.*?)"', response.get('Content-Disposition', default="file")).group(1)
+            if response.code != 200: 
+                return None
+            re_finding = re.search(r'filename="(.*?)"', response.get('Content-Disposition', default="file"))
+            if not re_finding: 
+                return None
+            filename = re_finding.group(1)
             # filepath = self.companyname2downloadname(' '.join((company.court, company.name)), filename)
             content = response.read()
             # with open(filepath, "wb") as f:
@@ -158,9 +173,15 @@ class HandelsRegister:
             browser.back()
 
     def getDocsFromDocsPage(self, browser: mechanize.Browser, id_nr : str, row_index : int, 
-                                    company : SearchResult):
+                                    company : SearchResult) -> int:
+        """Download all the Documents from documents page
+        Append the given searchResult object
+        returns: number of documents downloaded"""
         logging.info('# trying to download all files')
-        browser.open("https://www.handelsregister.de/rp_web/ergebnisse.xhtml", timeout=30)
+        resp = browser.open("https://www.handelsregister.de/rp_web/ergebnisse.xhtml", timeout=30)
+        if resp.code != 200: 
+            logging.error(f"could not open {resp=}")
+            return 0
         browser.select_form(name="ergebnissForm")
         select_str = f"ergebnissForm:selectedSuchErgebnisFormTable:{row_index}:j_idt{id_nr}:3:fade"
         # retrieve the data that would be sent if "click()"
@@ -169,6 +190,9 @@ class HandelsRegister:
         req = mechanize.Request(url=req_data[0],
                                 data=req_data[1] + "&" + urllib.parse.quote(select_str))
         docs_response = browser.open(req)
+        if docs_response.code != 200: 
+            logging.error(f"could not open {req=}")
+            return 0
         html_docs = docs_response.read()
         
         logging.debug(f"{self.browser.geturl() = }")
@@ -185,14 +209,22 @@ class HandelsRegister:
         # # header
         # [('Content-Type', 'application/x-www-form-urlencoded')])
         
-        view_state = re.search(r'javax.faces.ViewState=(.*?)&', urllib.parse.unquote(str(select.get_data()))).group(1)
-
+        re_finding = re.search(r'javax.faces.ViewState=(.*?)&', 
+                               urllib.parse.unquote(str(select.get_data())))
+        if not re_finding: 
+            logging.error(f"could not find view state id in {select.get_data()=}")
+            return 0
+        view_state = re_finding.group(1)
         tree_ids = re.findall(r'<li id="dk_form:dktree:(.*?)"', html_docs.decode())
         names = re.findall(r'role="treeitem">(.*?)</span>', html_docs.decode())
-        assert len(tree_ids) == len(names)
+        if len(tree_ids) != len(names):
+            logging.error(f"{len(tree_ids)=} != {len(names)=}")
+            return 0
         downloadable = { id : False for id in tree_ids}
         index = 1
-        if len(tree_ids) <= index: raise ValueError("len(tree_ids) <= index")
+        if len(tree_ids) <= index: 
+            logging.error(f"getDocsFromDocsPage @ {self.browser.geturl() = }: len(tree_ids) <= index")
+            return 0
 
         def create_request(view_state, instant_selection, tree_selection):
             return mechanize.Request(url="https://www.handelsregister.de/rp_web/documents-dk.xhtml", 
@@ -218,13 +250,19 @@ class HandelsRegister:
             tree_selection = tree_ids[index] # "0_0_0_0"
             req = create_request(view_state, instant_selection, tree_selection)
             resp = browser.open(req)
+            if resp.code != 200: 
+                return 0
             resp_data = resp.read()
 
             # get file name
             names = re.findall(r'role="treeitem">(.*?)</span>', resp_data.decode())
+            if not names: 
+                logging.error(f"could not find file name")
+                return 0
 
             # check if folder
-            download_disabled = resp_data.decode().find('onclick="" type="submit" disabled="disabled">') != -1
+            download_disabled = resp_data.decode().find(
+                'onclick="" type="submit" disabled="disabled">') != -1
             # downloadable.append(not download_disabled)
             downloadable.update({tree_ids[index] : not download_disabled})
 
@@ -241,9 +279,18 @@ class HandelsRegister:
         for id in to_download:
             req = create_request(view_state, id, id)
             resp = browser.open(req)
+            if resp.code != 200: 
+                continue
             resp_str = resp.read().decode()
-            j_id = re.findall(r'<button id="dk_form:j_idt(\d*?)" name="dk_form:j_idt(\d*?)" class="ui-button ui-widget ui-state-default ui-corner-all ui-button-text-only" onclick="" type="submit">',
-                        resp_str)[0][0]
+            re_findings = re.findall(r'<button id="dk_form:j_idt(\d*?)" name="dk_form:j_idt(\d*?)" class="ui-button ui-widget ui-state-default ui-corner-all ui-button-text-only" onclick="" type="submit">',
+                        resp_str)
+            if re_findings == []: 
+                logging.error(f"could not find j_id (e.g. 0_0_1) in {resp}")
+                continue
+            if re_findings[0] == []: 
+                logging.error(f"could not find j_id (e.g. 0_0_1) in {resp}")
+                continue
+            j_id = re_findings[0][0]
             download_req = mechanize.Request(
                 url = 'https://www.handelsregister.de/rp_web/documents-dk.xhtml',
                 data= {
@@ -256,11 +303,20 @@ class HandelsRegister:
                 }
             )
             download_resp = browser.open(download_req)
-            assert "attachment;" in download_resp.get('Content-Disposition', default="")
-            filename = re.search(r'filename="(.*?)"', download_resp.get('Content-Disposition', default="file")).group(1)
+            if download_resp.code != 200: 
+                continue
+            if not "attachment;" in download_resp.get('Content-Disposition', default=""):
+                logging.error(f"{j_id=}: could not find 'attachment;' in {download_resp}")
+                continue
+            re_findings = re.search(r'filename="(.*?)"', download_resp.get('Content-Disposition', default="file"))
+            if not re_findings: 
+                logging.error(f"{j_id=}:could not find filename in {download_resp}")
+                continue
+            filename = re_findings.group(1)
             download_data = download_resp.read()
             # filepath = self.companyname2cachename(' '.join(self.args.schlagwoerter), filename)
-            company.documents.append(DownloadedFile(filename=filename, content=download_data))
+            company.documents.append(DownloadedFile(filename=filename, 
+                                                    content=download_data))
         return len(to_download)
 
 
@@ -300,7 +356,7 @@ class HandelsRegister:
             nr_str = "" 
             for substr in self.args.registerNummer:
                 if substr.isnumeric(): nr_str = nr_str + substr
-            print(f"{nr_str=}")
+            logging.info(f"{nr_str=}")
             self.browser["form:registerNummer"] = nr_str
         if self.args.registerGericht:
             # optionen finden
@@ -342,6 +398,10 @@ class HandelsRegister:
                 continue
             #print('r[%s] %s' % (index_str, result))
             company = parse_result(table_row)
+            if not company: 
+                logging.info(f"could not create a search result object @ {index_str=}")
+                continue
+            
             companies.append(company)
 
         
@@ -362,12 +422,14 @@ class HandelsRegister:
 
 
 
-def parse_result(html):
+def parse_result(html) -> SearchResult | None:
     cells = []
     for cellnum, cell in enumerate(html.find_all('td')):
-        #print('[%d]: %s [%s]' % (cellnum, cell.text, cell))
         cells.append(cell.text.strip())
     #assert cells[7] == 'History'
+    if len(cells) < 4:
+        logging.error(f"found only {len(cells)} cells in search result html: {html[:200]} ...")
+        return None
     search_result = SearchResult(
         court = cells[1],
         name = cells[2],
@@ -377,7 +439,7 @@ def parse_result(html):
     # d['documents'] = cells[5] # todo: get the document links    
     hist_start = 8
     hist_cnt = (len(cells)-hist_start)/3
-    for i in range(hist_start, len(cells), 3):
+    for i in range(hist_start, len(cells)-1, 3):
         search_result.history.append({'name' : cells[i], 
                                       'location' : cells[i+1]}) # (name, location)
     #print('d:',d)
