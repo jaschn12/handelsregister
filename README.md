@@ -35,12 +35,12 @@ pip freeze > requirements.txt
 
 ### To Do
 - ~~create an output level between nothing and debug -> logging.INFO~~
-- create logging.info() code
-- after each http request: check for error code
+- ~~create logging.info() code~~
+- ~~after each http request: check for error code~~
 - add retry and timeouts for request
 - change user agent regularly
-- exit with error codes
-- check for Exception raising parts and make them error-proof
+- ~~exit with error codes~~
+- ~~check for Exception raising parts and make them error-proof~~
 
 ### Installation with conda
 Example installation and execution with conda:
