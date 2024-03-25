@@ -10,6 +10,25 @@ Die Einsichtnahme in das Handelsregister sowie in die dort eingereichten Dokumen
 
 ## Handelsregister
 
+### Initial Setup: 
+
+```
+conda create -n handelsregister-api python mechanize beautifulsoup4 Flask pytest
+conda env export > environment.yaml
+pip freeze > requirements.txt
+```
+### Setup
+
+    cd ./Path/to/Directory
+    git clone https://github.com/jaschn12/handelsregister.git 
+    cd ./handelsregister
+    conda env create -f environment.yaml
+
+    conda activate handelsregister-api
+
+### Run search
+    python handelsregister.py -s hotel st georg knerr -so all
+
 ### Datenstruktur
 
 ***URL:*** https://www.handelsregister.de/rp_web/erweitertesuche.xhtml

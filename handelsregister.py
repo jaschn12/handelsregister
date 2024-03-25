@@ -486,7 +486,7 @@ if __name__ == "__main__":
     logging.debug(f"{args = }")
     h = HandelsRegister(args)
     h.open_startpage()
-    self = h # for Interactive Mode 
+    self = h # for Python Interactive Mode 
     companies = h.search_companies()
     if not companies: 
         print("No companies matching your search")
