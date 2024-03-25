@@ -389,7 +389,7 @@ class HandelsRegister:
         id_nrs_found = re.findall(r'selectedSuchErgebnisFormTable:0:j_idt(\d+):0:fade', html)
         if not id_nrs_found: 
             logging.info(f"no id_nr found in {html}")
-            return
+            return []
         id_nr = id_nrs_found[0]
 
         for table_row in grid.find_all('tr'):
