@@ -490,7 +490,7 @@ def parse_args(args_string = None):
     parser.add_argument(
                           "-gericht",
                           "--registerGericht",
-                          help="Search for the provided register number",
+                          help="Search for the provided register court",
                           nargs='+'
                         )
     parser.add_argument(
